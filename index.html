@@ -592,21 +592,23 @@ function netPeers(ch){const o=ch.peers.find(p=>!p.isMe&&p.kind==='viewer');
  if(o){NET.had=true;if(o.presence.b)NET.rb=o.presence.b;const s=o.presence.s;if(s&&NET.on&&s[11]===NET.rd)NET.rs={s,t:performance.now()};
   if(state==='online'&&NET.host&&NET.rb&&!NET.started){NET.started=true;netEmit({t:'go'});startOnline()}}
  else if(NET.had)netEnd(false,'相手が退出しました')}
-function startOnline(){NET.rm=0;NET.rrm=0;NET.rd++;NET.on=true;DF=DFS.normal;mode='online';NET.rs=null;NET.acc=0;NET.q=[];toast('');$('ol').style.display='none';start()}
+function startOnline(){NET.ko=0;NET.rm=0;NET.rrm=0;NET.rd++;NET.on=true;DF=DFS.normal;mode='online';NET.rs=null;NET.acc=0;NET.q=[];toast('');$('ol').style.display='none';start()}
 function netRematch(){NET.rm=1;netEmit({t:'rm'});toast('相手を待っています…',60000);if(NET.rrm)startOnline()}
 function netEnd(silent,msg){NET.off.forEach(f=>f());NET.off=[];if(NET.room){try{NET.room.leave()}catch(e){}}NET.room=null;NET.on=false;NET.had=false;NET.started=false;NET.rb=null;NET.rs=null;NET.q=[];NET.rm=0;NET.rrm=0;DF=DFS[DFK]||DFS.normal;if(mode==='online')mode='battle';if(!silent)showMenu();if(msg)toast(msg,3500)}
 function netEv(d){if(!d)return;
  if(d.t==='go'&&state==='online')startOnline();
  else if(d.t==='rm'){NET.rrm=1;if(NET.rm)startOnline()}
+ else if(d.t==='ko'){if(NET.on){NET.ko=1;E.hp=0}}
  else if(!NET.on)return;
  else if(d.t==='f'){for(const q of d.b||[]){const mesh=new T.Mesh(bg,M2);mesh.position.set(q[1],q[2],q[3]);scene.add(mesh);bul.push({mesh,v:new T.Vector3(q[4],q[5],q[6]),t:P,l:2,dm:q[7]});E.rc=1;if(q[0]==='L')E.sfL=.4;else E.sf=.4}}
  else if(d.t==='m'){missile(E,P);const m=mis[mis.length-1];if(m){m.dm=d.d;m.tr=d.tr}E.rc=1}
  else if(d.t==='ma'){const A=ATK[d.k];if(A){E.at={k:d.k,t:0,hit:0,A,hand:d.h,rem:1};E.bt=3}}
  else if(d.t==='mh'){const k=d.k||22;P.hp=Math.max(0,P.hp-d.dm);dmgFx(P,d.dm);P.slide=k>30?.6:.35;if(!P.gv)P.gv=new T.Vector3();P.gv.x+=d.fx*k;P.gv.z+=d.fz*k;if(k>30)P.v.y=Math.max(P.v.y,k>60?10:6);boom(new T.Vector3(P.p.x,P.p.y+2.5,P.p.z),16)}}
+function netKO(){const send=()=>{if(!NET.room||!NET.on)return;const rd=v=>Math.round(v*100)/100;NET.room.presence({s:[rd(P.p.x),rd(P.p.y),rd(P.p.z),0,0,0,0,Math.round(P.en),0,0,0,NET.rd]}).catch(()=>{});netEmit({t:'ko'})};send();setTimeout(send,150);setTimeout(send,400);setTimeout(send,900)}
 function netStep(dt){const r=NET.rs;
  if(r){const s=r.s,age=Math.min(.15,(performance.now()-r.t)/1000),k=Math.min(1,dt*16);
   E.p.x+=(s[0]+s[3]*age-E.p.x)*k;E.p.z+=(s[2]+s[4]*age-E.p.z)*k;E.p.y+=(s[1]+s[5]*age-E.p.y)*k;if(E.p.y<0)E.p.y=0;
-  if(E.hp>s[6]+.01)dmgFx(E,E.hp-s[6]);E.hp=s[6];E.en=s[7];E.fl=!!s[8];if(s[9])E.sf=.15;if(s[10])E.sfL=.15}
+  if(E.hp>s[6]+.01)dmgFx(E,E.hp-s[6]);E.hp=NET.ko?0:s[6];E.en=s[7];E.fl=!!s[8];if(s[9])E.sf=.15;if(s[10])E.sfL=.15}
  NET.acc+=dt;if(NET.acc>=.066&&NET.room){NET.acc=0;const g=P.gv||{x:0,z:0},rd=v=>Math.round(v*100)/100;
   NET.room.presence({s:[rd(P.p.x),rd(P.p.y),rd(P.p.z),rd(g.x),rd(g.z),rd(P.v.y),Math.round(P.hp*10)/10,Math.round(P.en),P.fl?1:0,P.sf>0?1:0,P.sfL>0?1:0,NET.rd]}).catch(()=>{});
   if(NET.q.length){netEmit({t:'f',b:NET.q});NET.q=[]}}}
@@ -678,7 +680,7 @@ function loop(){requestAnimationFrame(loop);const dt=Math.min(clock.getDelta(),.
   E.hp=E.mh;P.hp=P.mh;P.en=P.mx;P.mm=P.mmax;E.en=E.mx;E.mm=E.mmax;
   while(tr.log.length&&n-tr.log[0][0]>3000)tr.log.shift();
   $('ts').textContent='ダメージ '+Math.round(tr.tot)+' ／ DPS '+(tr.log.reduce((a,x)=>a+x[1],0)/3).toFixed(0)+' ／ ヒット '+tr.hits}
- if(state==='play'&&(P.hp<=0||E.hp<=0)){state='over';boom(P.hp<=0?P.p:E.p,40);const w=E.hp<=0;
+ if(state==='play'&&(P.hp<=0||E.hp<=0)){state='over';if(NET.on&&P.hp<=0)netKO();boom(P.hp<=0?P.p:E.p,40);const w=E.hp<=0;
   $('msg').innerHTML='<h1 class="'+(w?'win':'lose')+'">'+(w?'VICTORY':'DEFEAT')+'</h1><div style="margin-top:10px"><button class="mb" data-m="battle">もう一度</button><button class="mb" data-m="menu">メニュー</button></div>';$('msg').style.display='flex'}
  if(state==='custom'){const tt=performance.now()/1500;cam.position.set(P.p.x+Math.sin(tt)*15,P.p.y+5,P.p.z+Math.cos(tt)*15);cam.lookAt(P.p.x,P.p.y+3.5,P.p.z);cam.translateX(-$('cu').offsetWidth/innerHeight*8.66)}else if(state==='ready'&&$('home').style.display==='block'){const tt=performance.now()/2500,an=Math.PI-.9+Math.sin(tt)*.2;cam.position.set(P.p.x+Math.sin(an)*15,P.p.y+4.5,P.p.z+Math.cos(an)*15);cam.lookAt(P.p.x,P.p.y+3.5,P.p.z);cam.translateX(3.6*cam.aspect)}
  {const pl=state==='play'||state==='over';$('hud').style.display=pl?'flex':'none';$('ret').style.display=pl?'':'none'}
