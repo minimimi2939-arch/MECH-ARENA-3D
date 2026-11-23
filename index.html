@@ -558,9 +558,32 @@ $('tf').textContent='右手';$('tn').textContent='左手';NM.tf='右手';NM.tn='
 applyBuild();
 function toast(t,ms){const e=$('tst');if(!t){e.style.display='none';return}e.textContent=t;e.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>{e.style.display='none'},ms||2500)}
 function olStat(t){$('olt').textContent=t}
+function loadPeer(){return new Promise(res=>{if(window.Peer)return res(true);const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js';s.onload=()=>res(!!window.Peer);s.onerror=()=>res(false);document.head.appendChild(s)})}
+async function p2pRoom(){if(!(await loadPeer()))return null;
+ return{join:name=>new Promise((resolve,reject)=>{
+  const hid='mecharena3d-'+name.replace(/^mech-/,''),evH=[],peerH=[];let mine={},theirs=null,chS=null,chE=null,peer=null,done=false,gotS=false,gotE=false;
+  const peersObj=()=>({peers:[{isMe:true,kind:'viewer',presence:mine}].concat(theirs?[{isMe:false,kind:'viewer',presence:theirs}]:[])}),
+   notify=()=>peerH.slice().forEach(f=>{try{f(peersObj())}catch(e){}}),
+   sendS=()=>{if(chS&&chS.open)try{chS.send({k:'p',d:mine})}catch(e){}},
+   fail=e=>{if(done)return;done=true;try{peer.destroy()}catch(x){}reject(e)};
+  const room={on(t,f){evH.push(f);return()=>{const i=evH.indexOf(f);if(i>=0)evH.splice(i,1)}},
+   onPeers(f){peerH.push(f);return()=>{const i=peerH.indexOf(f);if(i>=0)peerH.splice(i,1)}},
+   presence(p){Object.assign(mine,p);sendS();return Promise.resolve()},
+   emit(t,d){if(chE&&chE.open)try{chE.send({k:'e',d})}catch(e){}return Promise.resolve()},
+   leave(){try{peer&&peer.destroy()}catch(e){}}};
+  const hook=c=>{c.on('data',m=>{if(!m)return;if(m.k==='p'){theirs=m.d;notify()}else if(m.k==='e')evH.slice().forEach(f=>{try{f({isMe:false,data:m.d})}catch(e){}})});c.on('close',()=>{theirs=null;notify()})},
+   ready=()=>{if(done||!gotS||!gotE)return;done=true;sendS();resolve(room)},
+   ice={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:global.stun.twilio.com:3478'}]};
+  try{
+   if(NET.host){peer=new Peer(hid,{config:ice});peer.on('error',fail);peer.on('open',()=>{done=true;resolve(room)});
+    peer.on('connection',c=>{hook(c);if(c.label==='s')chS=c;else chE=c;c.on('open',()=>sendS())})}
+   else{peer=new Peer({config:ice});peer.on('error',fail);
+    peer.on('open',()=>{const a=peer.connect(hid,{label:'s',reliable:false,serialization:'json'}),b=peer.connect(hid,{label:'e',reliable:true,serialization:'json'});chS=a;chE=b;hook(a);hook(b);
+     a.on('open',()=>{gotS=true;sendS();ready()});b.on('open',()=>{gotE=true;ready()});setTimeout(()=>fail(new Error('timeout')),12000)})}
+  }catch(e){fail(e)}})}}
 function netEmit(d){if(NET.room)NET.room.emit('ev',d).catch(()=>{})}
 function openOnline(){state='online';$('home').style.display='none';$('ol').style.display='block';olStat('部屋を作るか、コードで参加してください')}
-async function netJoin(code){const r=window.claude&&claude.use?await claude.use('room'):null;if(!r){olStat('オンラインに接続できません（共有されたページで開いてください）');return false}
+async function netJoin(code){olStat('接続中…');let r=window.claude&&claude.use?await claude.use('room').catch(()=>null):null;if(!r)r=await p2pRoom();if(!r){olStat('オンラインに接続できません');return false}
  try{NET.room=await r.join('mech-'+code)}catch(e){olStat('部屋に入れませんでした');return false}
  NET.off.push(NET.room.on('ev',m=>{if(!m.isMe)netEv(m.data)},()=>netEnd(false,'接続が切れました')));
  NET.off.push(NET.room.onPeers(netPeers,()=>netEnd(false,'接続が切れました')));
@@ -662,7 +685,7 @@ function loop(){requestAnimationFrame(loop);const dt=Math.min(clock.getDelta(),.
  ren.render(scene,cam)}
 loop();
 
-if(!(window.claude&&window.claude.use)){const ob=document.querySelector('[data-m=online]');if(ob)ob.style.display='none'}
+
 
 </script>
 </body></html>
